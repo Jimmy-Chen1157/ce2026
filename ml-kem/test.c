@@ -236,7 +236,7 @@ static void run_stack(void)
     hal_spraystack();
     pqcrystals_kyber768_ref_keypair(pk, sk);
     stack_usage = hal_checkstack();
-    sprintf(outstr, "stack usage for keypair generation: %zu bytes", stack_usage);
+    sprintf(outstr, "stack usage for keypair generation: %lu bytes", (unsigned long)stack_usage);
     hal_send_str(outstr);
 
     // Measure stack usage for encapsulation
@@ -244,7 +244,7 @@ static void run_stack(void)
     hal_spraystack();
     pqcrystals_kyber768_ref_enc(ct, ss, pk);
     stack_usage = hal_checkstack();
-    sprintf(outstr, "stack usage for encapsulation: %zu bytes", stack_usage);
+    sprintf(outstr, "stack usage for encapsulation: %lu bytes", (unsigned long)stack_usage);
     hal_send_str(outstr);
 
     // Measure stack usage for decapsulation
@@ -252,7 +252,7 @@ static void run_stack(void)
     hal_spraystack();
     pqcrystals_kyber768_ref_dec(ss, ct, sk);
     stack_usage = hal_checkstack();
-    sprintf(outstr, "stack usage for decapsulation: %zu bytes", stack_usage);
+    sprintf(outstr, "stack usage for decapsulation: %lu bytes", (unsigned long)stack_usage);
     hal_send_str(outstr);
 
     hal_send_str("Stack measurements completed!\n");

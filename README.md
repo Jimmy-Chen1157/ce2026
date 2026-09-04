@@ -1,10 +1,21 @@
-# NTU Cryptographic Engineering 2025 - Final Projects
+# NTU Cryptographic Engineering 2026
 
 This repository contains implementations of various cryptographic algorithms cross-compiled for an Arm Cortex-M4 microcontrollers. Code can be tested using QEMU emulation or deployed on a STM32F407 development board for performance benchmarking.
 
-## Projects
+## Contents
 
-### Project Structure
+### Homework 0
+
+- **hw0/**: implement the ChaCha20 quarter round in Armv7-M assembly
+
+Homework 0 checks that your development environment works and that you can
+write, assemble and test a small piece of Cortex-M4 assembly. The ChaCha20
+stream cipher calls your quarter round, so the provided keystream test vector
+only passes once your assembly is correct. It runs in QEMU, so you do not need
+the development board to complete it. The instructions are in
+`ce2026-homework0.pdf` on NTU COOL.
+
+### Final Projects
 
 Projects are organized into two parts:
 
@@ -18,10 +29,11 @@ Projects are organized into two parts:
 
 ### Completion Requirements
 
-- **Groups of 2**: Complete all 4 projects (both Part A and Part B)
-- **Individual work**: Complete one project from Part A and one project from Part B
+The final project is completed **individually**: one project from Part A and one
+project from Part B.
 
-For more details on the final project (required tasks, hints, and grading details), refer to the final project document in NTU COOL.
+For more details on the final project (required tasks, hints, and grading
+details), refer to `ce2026-final-project.pdf` on NTU COOL.
 
 ## Quick Start
 
@@ -33,7 +45,7 @@ If you are using Windows, we highly recommend using an Ubuntu virtual machine, e
 **Arm GCC Toolchain**:
 - **Preferred**: Download from [Arm GNU Toolchain Downloads](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads)
 - Ubuntu/Debian: `sudo apt install gcc-arm-none-eabi`
-- macOS: `brew install gcc-arm-embedded`
+- macOS: `brew install arm-none-eabi-gcc`
 
 **QEMU with Arm support**:
 - Ubuntu/Debian: `sudo apt install qemu-system-arm`
@@ -51,8 +63,8 @@ If you are using Windows, we highly recommend using an Ubuntu virtual machine, e
 
 Clone the starter package with its submodules
 ```
-git clone --recursive https://github.com/mkannwischer/ce2025
-cd ce2025
+git clone --recursive https://github.com/mkannwischer/ce2026
+cd ce2026
 ```
 
 ### Building and Running
@@ -79,10 +91,13 @@ cd ml-dsa/                      # or any project directory
 make size PLATFORM=qemu         # Analyze code size (works with any platform)
 ```
 
-### Test All Projects
+### Test All Final Projects
 ```bash
-./run-all-tests.sh            # Run tests for all projects
+./run-all-tests.sh            # Run tests for all four final projects
 ```
+Note that this covers the final projects only. Homework 0 is expected to fail
+until you have implemented it; check it with `make run-qemu PLATFORM=qemu` in
+`hw0/`.
 
 ## Project Structure
 

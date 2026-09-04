@@ -116,7 +116,7 @@ static void run_stack(void)
   hal_spraystack();
   crypto_scalarmult_base(pk, sk0);
   stack_usage = hal_checkstack();
-  sprintf(outstr, "stack usage for crypto_scalarmult_base: %zu bytes", stack_usage);
+  sprintf(outstr, "stack usage for crypto_scalarmult_base: %lu bytes", (unsigned long)stack_usage);
   hal_send_str(outstr);
 
   // Measure stack usage for crypto_scalarmult (shared secret computation)
@@ -124,7 +124,7 @@ static void run_stack(void)
   hal_spraystack();
   crypto_scalarmult(ss, sk0, pk);
   stack_usage = hal_checkstack();
-  sprintf(outstr, "stack usage for crypto_scalarmult: %zu bytes", stack_usage);
+  sprintf(outstr, "stack usage for crypto_scalarmult: %lu bytes", (unsigned long)stack_usage);
   hal_send_str(outstr);
 
   hal_send_str("Stack measurements completed!\n");

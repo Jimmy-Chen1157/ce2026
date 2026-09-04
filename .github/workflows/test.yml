@@ -27,6 +27,9 @@ jobs:
       with:
         release: '14.2.Rel1'
         
+    - name: Build Homework 0
+      run: make -C hw0 PLATFORM=qemu
+
     - name: Run tests
       run: ./run-all-tests.sh
       timeout-minutes: 5
@@ -48,6 +51,9 @@ jobs:
 
     - name: Build all projects for STM32
       run: |
+        echo "Building Homework 0 for STM32..."
+        make -C hw0 PLATFORM=stm32
+
         echo "Building SHAKE256 for STM32..."
         make -C shake256 PLATFORM=stm32
         

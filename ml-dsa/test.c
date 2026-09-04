@@ -295,7 +295,7 @@ static void run_stack(void)
     hal_spraystack();
     crypto_sign_keypair(pk, sk);
     stack_usage = hal_checkstack();
-    sprintf(outstr, "stack usage for keypair generation: %zu bytes", stack_usage);
+    sprintf(outstr, "stack usage for keypair generation: %lu bytes", (unsigned long)stack_usage);
     hal_send_str(outstr);
 
     // Measure stack usage for signature generation
@@ -303,7 +303,7 @@ static void run_stack(void)
     hal_spraystack();
     crypto_sign_signature_internal(sig, &siglen, message, 53, ctx, 0, rnd, sk);
     stack_usage = hal_checkstack();
-    sprintf(outstr, "stack usage for signature generation: %zu bytes", stack_usage);
+    sprintf(outstr, "stack usage for signature generation: %lu bytes", (unsigned long)stack_usage);
     hal_send_str(outstr);
 
     // Measure stack usage for signature verification
@@ -311,7 +311,7 @@ static void run_stack(void)
     hal_spraystack();
     crypto_sign_verify_internal(sig, siglen, message, 53, ctx, 0, pk);
     stack_usage = hal_checkstack();
-    sprintf(outstr, "stack usage for signature verification: %zu bytes", stack_usage);
+    sprintf(outstr, "stack usage for signature verification: %lu bytes", (unsigned long)stack_usage);
     hal_send_str(outstr);
 
     hal_send_str("Stack measurements completed!\n");

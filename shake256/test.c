@@ -150,7 +150,7 @@ static void run_stack(void)
   hal_spraystack();
   shake256(stack_digest, 1024, stack_msg, 1024);
   stack_usage = hal_checkstack();
-  sprintf(outstr, "stack usage for SHAKE256: %zu bytes", stack_usage);
+  sprintf(outstr, "stack usage for SHAKE256: %lu bytes", (unsigned long)stack_usage);
   hal_send_str(outstr);
 
   // Measure stack usage for KeccakF1600 permutation
@@ -159,7 +159,7 @@ static void run_stack(void)
   hal_spraystack();
   KeccakF1600_StatePermute(state);
   stack_usage = hal_checkstack();
-  sprintf(outstr, "stack usage for KeccakF1600: %zu bytes", stack_usage);
+  sprintf(outstr, "stack usage for KeccakF1600: %lu bytes", (unsigned long)stack_usage);
   hal_send_str(outstr);
 
   hal_send_str("Stack measurements completed!\n");
