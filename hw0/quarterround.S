@@ -31,7 +31,24 @@ quarterround:
     // TODO: your implementation goes here.
     //       a = r4, b = r5, c = r6, d = r7
 
-    str r4, [r0]
+    add r4, r5, r4
+    eor r7, r4, r7
+    ror r7, r7, #0x10
+
+    add r6, r7, r6
+    eor r5, r6, r5
+    ror r5, r5, #0x14 
+
+    add r4, r5, r4
+    eor r7, r4, r7
+    ror r7, r7, #0x18
+
+    add r6, r7, r6
+    eor r5, r6, r5
+    ror r5, r5, #0x19
+
+
+    str r4, [r0] 
     str r5, [r1]
     str r6, [r2]
     str r7, [r3]

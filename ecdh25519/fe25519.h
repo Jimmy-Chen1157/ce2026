@@ -3,9 +3,10 @@
 
 #include <stdint.h>
 
-typedef struct 
+/* Five radix-2^51 limbs cover the 255-bit field. */
+typedef struct
 {
-  uint32_t v[32]; 
+  uint64_t v[5];
 }
 fe25519;
 

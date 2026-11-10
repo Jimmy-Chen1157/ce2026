@@ -1,123 +1,84 @@
 #include <stdio.h>
 #include "fe25519.h"
 
-const fe25519 fe25519_zero = {{0}};
-const fe25519 fe25519_one  = {{1}};
-const fe25519 fe25519_two  = {{2}};
+/* p = 2^255 - 19, represented in radix 2^51. */
+#define FE_MASK ((UINT64_C(1) << 51) - 1)
 
-/* sqrt(-1) */
-const fe25519 fe25519_sqrtm1 = {{0xB0, 0xA0, 0x0E, 0x4A, 0x27, 0x1B, 0xEE, 0xC4, 0x78, 0xE4, 0x2F, 0xAD, 0x06, 0x18, 0x43, 0x2F,
-                                 0xA7, 0xD7, 0xFB, 0x3D, 0x99, 0x00, 0x4D, 0x2B, 0x0B, 0xDF, 0xC1, 0x4F, 0x80, 0x24, 0x83, 0x2B}};
+const fe25519 fe25519_zero = {{0, 0, 0, 0, 0}};
+const fe25519 fe25519_one = {{1, 0, 0, 0, 0}};
+const fe25519 fe25519_two = {{2, 0, 0, 0, 0}};
+const fe25519 fe25519_sqrtm1 = {{0x61b274a0ea0b0, 0xd5a5fc8f189d, 0x7ef5e9cbd0c60, 0x78595a6804c9e, 0x2b8324804fc1d}};
+const fe25519 fe25519_msqrtm1 = {{0x1e4d8b5f15f3d, 0x72a5a0370e762, 0x10a16342f39f, 0x7a6a597fb361, 0x547cdb7fb03e2}};
+const fe25519 fe25519_m1 = {{0x7ffffffffffec, 0x7ffffffffffff, 0x7ffffffffffff, 0x7ffffffffffff, 0x7ffffffffffff}};
 
-/* -sqrt(-1) */
-const fe25519 fe25519_msqrtm1 = {{0x3D, 0x5F, 0xF1, 0xB5, 0xD8, 0xE4, 0x11, 0x3B, 0x87, 0x1B, 0xD0, 0x52, 0xF9, 0xE7, 0xBC, 0xD0,
-                                  0x58, 0x28, 0x4, 0xC2, 0x66, 0xFF, 0xB2, 0xD4, 0xF4, 0x20, 0x3E, 0xB0, 0x7F, 0xDB, 0x7C, 0x54}};
-
-/* -1 */
-const fe25519 fe25519_m1 = {{236, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                             0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f}};
-
-
-
-static uint32_t equal(uint32_t a,uint32_t b) /* 16-bit inputs */
+static void carry(fe25519 *r)
 {
-  uint32_t x = a ^ b; /* 0: yes; 1..65535: no */
-  x -= 1; /* 4294967295: yes; 0..65534: no */
-  x >>= 31; /* 1: yes; 0: no */
-  return x;
-}
-
-static uint32_t ge(uint32_t a,uint32_t b) /* 16-bit inputs */
-{
-  uint32_t x = a;
-  x -= (uint32_t) b; /* 0..65535: yes; 4294901761..4294967295: no */
-  x >>= 31; /* 0: yes; 1: no */
-  x ^= 1; /* 1: yes; 0: no */
-  return x;
-}
-
-static uint32_t times19(uint32_t a)
-{
-  return (a << 4) + (a << 1) + a;
-}
-
-static uint32_t times38(uint32_t a)
-{
-  return (a << 5) + (a << 2) + (a << 1);
-}
-
-static void reduce_add_sub(fe25519 *r)
-{
-  uint32_t t;
-  int i,rep;
-
-  for(rep=0;rep<2;rep++)
-  {
-    t = r->v[31] >> 7;
-    r->v[31] &= 127;
-    t = times19(t);
-    r->v[0] += t;
-    for(i=0;i<31;i++)
-    {
-      t = r->v[i] >> 8;
-      r->v[i+1] += t;
-      r->v[i] &= 255;
+  unsigned i, round;
+  /* A top-limb fold can create a carry in limb 0, so normalize again. */
+  for (round = 0; round < 3; ++round) {
+    uint64_t c;
+    for (i = 0; i < 4; ++i) {
+      c = r->v[i] >> 51;
+      r->v[i] &= FE_MASK;
+      r->v[i + 1] += c;
     }
+    c = r->v[4] >> 51;
+    r->v[4] &= FE_MASK;
+    r->v[0] += c * 19;
   }
 }
 
-static void reduce_mul(fe25519 *r)
-{
-  uint32_t t;
-  int i,rep;
-
-  for(rep=0;rep<3;rep++)
-  {
-    t = r->v[31] >> 7;
-    r->v[31] &= 127;
-    t = times19(t);
-    r->v[0] += t;
-    for(i=0;i<31;i++)
-    {
-      t = r->v[i] >> 8;
-      r->v[i+1] += t;
-      r->v[i] &= 255;
-    }
-  }
-}
-
-/* reduction modulo 2^255-19 */
 void fe25519_freeze(fe25519 *r)
 {
-  int i;
-  uint32_t m = equal(r->v[31],127);
-  for(i=30;i>0;i--)
-    m &= equal(r->v[i],255);
-  m &= ge(r->v[0],237);
-
-  m = -m;
-
-  r->v[31] -= m&127;
-  for(i=30;i>0;i--)
-    r->v[i] -= m&255;
-  r->v[0] -= m&237;
+  uint64_t q, mask;
+  unsigned i;
+  carry(r);
+  /* q is one exactly when the normalized value is at least p. */
+  q = (r->v[0] + 19) >> 51;
+  for (i = 1; i < 4; ++i)
+    q = (r->v[i] + q) >> 51;
+  q = (r->v[4] + q) >> 51;
+  mask = UINT64_C(0) - q;
+  for (i = 0; i < 5; ++i) {
+    uint64_t sub = (i == 0) ? FE_MASK - 18 : FE_MASK;
+    r->v[i] -= mask & sub;
+  }
 }
 
 void fe25519_unpack(fe25519 *r, const unsigned char x[32])
 {
-  int i;
-  for(i=0;i<32;i++) r->v[i] = x[i];
-  r->v[31] &= 127;
+  unsigned i;
+  for (i = 0; i < 5; ++i)
+    r->v[i] = 0;
+  for (i = 0; i < 255; ++i)
+    r->v[i / 51] |= (uint64_t)((x[i >> 3] >> (i & 7)) & 1) << (i % 51);
 }
 
-/* Assumes input x being reduced below 2^255 */
 void fe25519_pack(unsigned char r[32], const fe25519 *x)
 {
-  int i;
   fe25519 y = *x;
+  unsigned i;
   fe25519_freeze(&y);
-  for(i=0;i<32;i++)
-    r[i] = y.v[i];
+  for (i = 0; i < 32; ++i)
+    r[i] = 0;
+  for (i = 0; i < 255; ++i)
+    r[i >> 3] |= (unsigned char)(((y.v[i / 51] >> (i % 51)) & 1) << (i & 7));
+}
+
+int fe25519_iseq(const fe25519 *x, const fe25519 *y)
+{
+  unsigned char a[32], b[32];
+  unsigned i;
+  unsigned int d = 0;
+  fe25519_pack(a, x);
+  fe25519_pack(b, y);
+  for (i = 0; i < 32; ++i)
+    d |= (unsigned int)(a[i] ^ b[i]);
+  return d == 0;
+}
+int fe25519_iseq_vartime(const fe25519 *x, const fe25519 *y)
+{
+  return fe25519_iseq(x, y);
 }
 
 int fe25519_iszero(const fe25519 *x)
@@ -130,83 +91,106 @@ int fe25519_isone(const fe25519 *x)
   return fe25519_iseq(x, &fe25519_one);
 }
 
-// return true if x has LSB set
 int fe25519_isnegative(const fe25519 *x)
 {
   fe25519 t = *x;
-
   fe25519_freeze(&t);
-
-  return t.v[0] & 1;
+  return (int)(t.v[0] & 1);
 }
 
-int fe25519_iseq(const fe25519 *x, const fe25519 *y)
+unsigned char fe25519_getparity(const fe25519 *x)
 {
-  fe25519 t1,t2;
-  int i,r=0;
-
-  t1 = *x;
-  t2 = *y;
-  fe25519_freeze(&t1);
-  fe25519_freeze(&t2);
-  for(i=0;i<32;i++)
-    r |= (1-equal(t1.v[i],t2.v[i]));
-  return 1-r;
+  return (unsigned char)fe25519_isnegative(x);
 }
 
-void fe25519_cmov(fe25519 *r, const fe25519 *x, unsigned char b)
+void fe25519_setone(fe25519 *r)
 {
-  if(b) *r = *x;
+  *r = fe25519_one;
 }
 
-void fe25519_neg(fe25519 *r, const fe25519 *x)
+void fe25519_setzero(fe25519 *r)
 {
-  fe25519 t = fe25519_zero;
-  fe25519_sub(r, &t, x);
+  *r = fe25519_zero;
 }
 
 void fe25519_add(fe25519 *r, const fe25519 *x, const fe25519 *y)
 {
-  int i;
-  for(i=0;i<32;i++) r->v[i] = x->v[i] + y->v[i];
-  reduce_add_sub(r);
+  unsigned i;
+  for (i = 0; i < 5; ++i)
+    r->v[i] = x->v[i] + y->v[i];
+  carry(r);
 }
 
 void fe25519_double(fe25519 *r, const fe25519 *x)
 {
-  int i;
-  for(i=0;i<32;i++) r->v[i] = 2*x->v[i];
-  reduce_add_sub(r);
+  fe25519_add(r, x, x);
+}
+
+void fe25519_triple(fe25519 *r, const fe25519 *x)
+{
+  fe25519_double(r, x);
+  fe25519_add(r, r, x);
 }
 
 void fe25519_sub(fe25519 *r, const fe25519 *x, const fe25519 *y)
 {
-  int i;
-  uint32_t t[32];
-  t[0] = x->v[0] + 0x1da;
-  t[31] = x->v[31] + 0xfe;
-  for(i=1;i<31;i++) t[i] = x->v[i] + 0x1fe;
-  for(i=0;i<32;i++) r->v[i] = t[i] - y->v[i];
-  reduce_add_sub(r);
+  unsigned i;
+  r->v[0] = x->v[0] + 2 * (FE_MASK - 18) - y->v[0];
+  for (i = 1; i < 5; ++i)
+    r->v[i] = x->v[i] + 2 * FE_MASK - y->v[i];
+  carry(r);
+}
+
+void fe25519_neg(fe25519 *r, const fe25519 *x)
+{
+  fe25519_sub(r, &fe25519_zero, x);
 }
 
 void fe25519_mul(fe25519 *r, const fe25519 *x, const fe25519 *y)
 {
-  int i,j;
-  uint32_t t[63];
-  for(i=0;i<63;i++)t[i] = 0;
+  /*
+   * Cortex-M4 compilers do not provide a native 128-bit integer type. Split
+   * the radix-2^51 limbs into alternating 26- and 25-bit limbs so every
+   * product and convolution sum fits in uint64_t.
+   */
+  uint64_t a[10], b[10], h[10] = {0};
+  unsigned i, j;
+  for (i = 0; i < 5; ++i) {
+    a[2 * i] = x->v[i] & ((UINT64_C(1) << 26) - 1);
+    a[2 * i + 1] = x->v[i] >> 26;
+    b[2 * i] = y->v[i] & ((UINT64_C(1) << 26) - 1);
+    b[2 * i + 1] = y->v[i] >> 26;
+  }
+  for (i = 0; i < 10; ++i)
+    for (j = 0; j < 10; ++j) {
+      unsigned k = i + j;
+      /* Odd limbs start one bit later in the alternating radix. */
+      if (k >= 10) {
+        uint64_t fold = ((i & 1U) && (j & 1U)) ? UINT64_C(38) : UINT64_C(19);
+        h[k - 10] += fold * a[i] * b[j];
+      } else {
+        uint64_t scale = ((i & 1U) && (j & 1U)) ? UINT64_C(2) : UINT64_C(1);
+        h[k] += scale * a[i] * b[j];
+      }
+    }
 
-  for(i=0;i<32;i++)
-    for(j=0;j<32;j++)
-      t[i+j] += x->v[i] * y->v[j];
-
-  for(i=32;i<63;i++)
-    r->v[i-32] = t[i-32] + times38(t[i]);
-  r->v[31] = t[31]; /* result now in r[0]...r[31] */
-
-  reduce_mul(r);
+  /* Carry in radix 2^26, 2^25, ...; 2^255 folds back as 19. */
+  for (unsigned round = 0; round < 3; ++round) {
+    for (i = 0; i < 9; ++i) {
+      unsigned bits = (i & 1) ? 25 : 26;
+      uint64_t c = h[i] >> bits;
+      h[i] &= (UINT64_C(1) << bits) - 1;
+      h[i + 1] += c;
+    }
+    h[0] += (h[9] >> 25) * 19;
+    h[9] &= (UINT64_C(1) << 25) - 1;
+  }
+  r->v[0] = h[0] | (h[1] << 26);
+  r->v[1] = h[2] | (h[3] << 26);
+  r->v[2] = h[4] | (h[5] << 26);
+  r->v[3] = h[6] | (h[7] << 26);
+  r->v[4] = h[8] | (h[9] << 26);
 }
-
 void fe25519_square(fe25519 *r, const fe25519 *x)
 {
   fe25519_mul(r, x, x);
@@ -214,80 +198,85 @@ void fe25519_square(fe25519 *r, const fe25519 *x)
 
 void fe25519_pow2523(fe25519 *r, const fe25519 *x)
 {
-	fe25519 z2;
-	fe25519 z9;
-	fe25519 z11;
-	fe25519 z2_5_0;
-	fe25519 z2_10_0;
-	fe25519 z2_20_0;
-	fe25519 z2_50_0;
-	fe25519 z2_100_0;
-	fe25519 t;
-	int i;
+  fe25519 z2, z9, z11, z2_5_0, z2_10_0, z2_20_0, z2_50_0, z2_100_0, t;
+  int i;
 
-	/* 2 */ fe25519_square(&z2,x);
-	/* 4 */ fe25519_square(&t,&z2);
-	/* 8 */ fe25519_square(&t,&t);
-	/* 9 */ fe25519_mul(&z9,&t,x);
-	/* 11 */ fe25519_mul(&z11,&z9,&z2);
-	/* 22 */ fe25519_square(&t,&z11);
-	/* 2^5 - 2^0 = 31 */ fe25519_mul(&z2_5_0,&t,&z9);
+  fe25519_square(&z2, x);
+  fe25519_square(&t, &z2);
+  fe25519_square(&t, &t);
+  fe25519_mul(&z9, &t, x);
+  fe25519_mul(&z11, &z9, &z2);
+  fe25519_square(&t, &z11);
+  fe25519_mul(&z2_5_0, &t, &z9);
+  fe25519_square(&t, &z2_5_0);
+  for (i = 1; i < 5; ++i)
+    fe25519_square(&t, &t);
+  fe25519_mul(&z2_10_0, &t, &z2_5_0);
+  fe25519_square(&t, &z2_10_0);
+  for (i = 1; i < 10; ++i)
+    fe25519_square(&t, &t);
+  fe25519_mul(&z2_20_0, &t, &z2_10_0);
+  fe25519_square(&t, &z2_20_0);
+  for (i = 1; i < 20; ++i)
+    fe25519_square(&t, &t);
+  fe25519_mul(&t, &t, &z2_20_0);
+  fe25519_square(&t, &t);
+  for (i = 1; i < 10; ++i)
+    fe25519_square(&t, &t);
+  fe25519_mul(&z2_50_0, &t, &z2_10_0);
+  fe25519_square(&t, &z2_50_0);
+  for (i = 1; i < 50; ++i)
+    fe25519_square(&t, &t);
+  fe25519_mul(&z2_100_0, &t, &z2_50_0);
+  fe25519_square(&t, &z2_100_0);
+  for (i = 1; i < 100; ++i)
+    fe25519_square(&t, &t);
+  fe25519_mul(&t, &t, &z2_100_0);
+  fe25519_square(&t, &t);
+  for (i = 1; i < 50; ++i)
+    fe25519_square(&t, &t);
+  fe25519_mul(&t, &t, &z2_50_0);
+  fe25519_square(&t, &t);
+  fe25519_square(&t, &t);
+  fe25519_mul(r, &t, x);
+}
 
-	/* 2^6 - 2^1 */ fe25519_square(&t,&z2_5_0);
-	/* 2^10 - 2^5 */ for (i = 1;i < 5;i++) { fe25519_square(&t,&t); }
-	/* 2^10 - 2^0 */ fe25519_mul(&z2_10_0,&t,&z2_5_0);
-
-	/* 2^11 - 2^1 */ fe25519_square(&t,&z2_10_0);
-	/* 2^20 - 2^10 */ for (i = 1;i < 10;i++) { fe25519_square(&t,&t); }
-	/* 2^20 - 2^0 */ fe25519_mul(&z2_20_0,&t,&z2_10_0);
-
-	/* 2^21 - 2^1 */ fe25519_square(&t,&z2_20_0);
-	/* 2^40 - 2^20 */ for (i = 1;i < 20;i++) { fe25519_square(&t,&t); }
-	/* 2^40 - 2^0 */ fe25519_mul(&t,&t,&z2_20_0);
-
-	/* 2^41 - 2^1 */ fe25519_square(&t,&t);
-	/* 2^50 - 2^10 */ for (i = 1;i < 10;i++) { fe25519_square(&t,&t); }
-	/* 2^50 - 2^0 */ fe25519_mul(&z2_50_0,&t,&z2_10_0);
-
-	/* 2^51 - 2^1 */ fe25519_square(&t,&z2_50_0);
-	/* 2^100 - 2^50 */ for (i = 1;i < 50;i++) { fe25519_square(&t,&t); }
-	/* 2^100 - 2^0 */ fe25519_mul(&z2_100_0,&t,&z2_50_0);
-
-	/* 2^101 - 2^1 */ fe25519_square(&t,&z2_100_0);
-	/* 2^200 - 2^100 */ for (i = 1;i < 100;i++) { fe25519_square(&t,&t); }
-	/* 2^200 - 2^0 */ fe25519_mul(&t,&t,&z2_100_0);
-
-	/* 2^201 - 2^1 */ fe25519_square(&t,&t);
-	/* 2^250 - 2^50 */ for (i = 1;i < 50;i++) { fe25519_square(&t,&t); }
-	/* 2^250 - 2^0 */ fe25519_mul(&t,&t,&z2_50_0);
-
-	/* 2^251 - 2^1 */ fe25519_square(&t,&t);
-	/* 2^252 - 2^2 */ fe25519_square(&t,&t);
-	/* 2^252 - 3 */ fe25519_mul(r,&t,x);
+void fe25519_invert(fe25519 *r, const fe25519 *x)
+{
+  fe25519 t, x2, x3;
+  fe25519_pow2523(&t, x);
+  fe25519_square(&t, &t);
+  fe25519_square(&t, &t);
+  fe25519_square(&t, &t);
+  fe25519_square(&x2, x);
+  fe25519_mul(&x3, &x2, x);
+  fe25519_mul(r, &t, &x3);
 }
 
 void fe25519_invsqrt(fe25519 *r, const fe25519 *x)
 {
   fe25519 den2, den3, den4, den6, chk, t, t2;
   int b;
-
   fe25519_square(&den2, x);
   fe25519_mul(&den3, &den2, x);
-
   fe25519_square(&den4, &den2);
   fe25519_mul(&den6, &den2, &den4);
-  fe25519_mul(&t, &den6, x); // r is now x^7
-
+  fe25519_mul(&t, &den6, x);
   fe25519_pow2523(&t, &t);
   fe25519_mul(&t, &t, &den3);
-
   fe25519_square(&chk, &t);
   fe25519_mul(&chk, &chk, x);
-
   fe25519_mul(&t2, &t, &fe25519_sqrtm1);
   b = 1 - fe25519_isone(&chk);
-
-  fe25519_cmov(&t, &t2, b);
-
+  fe25519_cmov(&t, &t2, (unsigned char)b);
   *r = t;
+}
+
+void fe25519_print(const fe25519 *x)
+{
+  unsigned char b[32];
+  int i;
+  fe25519_pack(b, x);
+  for (i = 0; i < 32; ++i)
+    printf("%02x", b[i]);
 }

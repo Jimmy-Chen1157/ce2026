@@ -14,11 +14,13 @@ typedef struct
 } group_ge;
 
 extern const group_ge group_ge_base;
+extern const group_ge group_ge_neutral;
 
 int  group_ge_unpack(group_ge *r, const unsigned char x[GROUP_GE_PACKEDBYTES]);
 void group_ge_pack(unsigned char r[GROUP_GE_PACKEDBYTES], const group_ge *x);
 
 void group_ge_add(group_ge *r, const group_ge *x, const group_ge *y);
 void group_ge_double(group_ge *r, const group_ge *x);
+void group_ge_cswap(group_ge *x, group_ge *y, unsigned char b);
 
 #endif
