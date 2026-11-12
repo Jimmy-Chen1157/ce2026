@@ -18,6 +18,10 @@ extern const fe25519 fe25519_sqrtm1;
 extern const fe25519 fe25519_msqrtm1;
 extern const fe25519 fe25519_m1;
 
+extern void _fe25519_add(fe25519 *r, const fe25519 *x, const fe25519 *y);
+extern void _fe25519_carry(fe25519 *r);
+extern void _fe25519_cmov(fe25519 *r, const fe25519 *x, unsigned b);
+
 void fe25519_freeze(fe25519 *r);
 
 void fe25519_unpack(fe25519 *r, const unsigned char x[32]);

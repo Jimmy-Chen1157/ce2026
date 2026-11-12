@@ -2,6 +2,10 @@
 obj/
 bin/
 elf/
+dump/
+out/
+*.dump
+*.out
 *.o
 *.d
 *.a

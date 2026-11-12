@@ -2,9 +2,9 @@
 # Modify the source lists below to add your own C and assembly files
 
 # Add your C source files here:
-PROJECT_C_SOURCES = test.c fe25519.c group.c smult.c
+PROJECT_C_SOURCES = test.c fe25519.c group.c smult.c 
 # Add your assembly source files here:
-PROJECT_ASM_SOURCES = ct_select.S
+PROJECT_ASM_SOURCES = fe25519.S
 
 # Convert sources to object file paths
 PROJECT_C_OBJS = $(addprefix obj/,$(PROJECT_C_SOURCES:.c=.c.o))

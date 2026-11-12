@@ -103,7 +103,19 @@ const group_ge group_ge_base = {
   {{UINT64_C(0x68ab3a5b7dda3), UINT64_C(0xeea2a5eadbb), UINT64_C(0x2af8df483c27e), UINT64_C(0x332b375274732), UINT64_C(0x67875f0fd78b7)}}
 };
 
-
+void group_ge_cswap(group_ge *x, group_ge *y, unsigned char b)
+{
+  uint64_t mask = UINT64_C(0) - (uint64_t)(b & 1U);
+  fe25519 *xc[4] = {&x->x, &x->y, &x->z, &x->t};
+  fe25519 *yc[4] = {&y->x, &y->y, &y->z, &y->t};
+  unsigned i, j;
+  for (i = 0; i < 4; ++i)
+    for (j = 0; j < 5; ++j) {
+      uint64_t d = mask & (xc[i]->v[j] ^ yc[i]->v[j]);
+      xc[i]->v[j] ^= d;
+      yc[i]->v[j] ^= d;
+    }
+}
 
 /* Packing and unpacking is using Hamburg's "ristretto" approach. See
  * https://eprint.iacr.org/2015/673 and
