@@ -18,6 +18,9 @@ extern const fe25519 fe25519_sqrtm1;
 extern const fe25519 fe25519_msqrtm1;
 extern const fe25519 fe25519_m1;
 
+/* Fixed-size Cortex-M4 helper for the 16-digit field multiplication. */
+extern void _fe25519_mul_coeff(uint64_t *out, const uint64_t *a,
+                              const uint64_t *b);
 extern void _fe25519_add(fe25519 *r, const fe25519 *x, const fe25519 *y);
 extern void _fe25519_carry(fe25519 *r);
 extern void _fe25519_cmov(fe25519 *r, const fe25519 *x, unsigned b);

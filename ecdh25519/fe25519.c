@@ -139,49 +139,59 @@ void fe25519_neg(fe25519 *r, const fe25519 *x)
 
 void fe25519_mul(fe25519 *r, const fe25519 *x, const fe25519 *y)
 {
-  /*
-   * Cortex-M4 compilers do not provide a native 128-bit integer type. Split
-   * the radix-2^51 limbs into alternating 26- and 25-bit limbs so every
-   * product and convolution sum fits in uint64_t.
-   */
-  uint64_t a[10], b[10], h[10] = {0};
-  unsigned i, j;
-  for (i = 0; i < 5; ++i) {
-    a[2 * i] = x->v[i] & ((UINT64_C(1) << 26) - 1);
-    a[2 * i + 1] = x->v[i] >> 26;
-    b[2 * i] = y->v[i] & ((UINT64_C(1) << 26) - 1);
-    b[2 * i + 1] = y->v[i] >> 26;
-  }
-  for (i = 0; i < 10; ++i)
-    for (j = 0; j < 10; ++j) {
-      unsigned k = i + j;
-      uint64_t odd_pair_mask = UINT64_C(0) - (uint64_t)(i & j & 1U);
-      /* Odd limbs start one bit later in the alternating radix. */
-      uint64_t k_mask = UINT64_C(0) - (uint64_t)((k - 10) >> 31);
-      uint64_t fold = UINT64_C(19) ^ (odd_pair_mask & (UINT64_C(38) ^ UINT64_C(19)));
-      uint64_t scale = UINT64_C(1) ^ (odd_pair_mask & (UINT64_C(2) ^ UINT64_C(1)));
-      uint64_t mult = fold ^ (k_mask & (fold ^ scale));
-      signed index = (k-10) ^ (k_mask & ((k-10) ^ k));
-      h[index] += (mult * a[i] * b[j]);
-    }
+  const uint64_t digit_mask = UINT64_C(0xffff);
+  uint64_t a[16], b[16], h[32];
+  unsigned i, bit;
 
-  /* carry in radix 2^26, 2^25, ...; 2^255 folds back as 19. */
-  for (unsigned round = 0; round < 3; ++round) {
-    for (i = 0; i < 9; ++i) {
-      unsigned odd_mask = 0U - (i & 1U);
-      unsigned bits = 26U ^ (odd_mask & (26U ^ 25U));
-      uint64_t c = h[i] >> bits;
-      h[i] &= (UINT64_C(1) << bits) - 1;
-      h[i + 1] += c;
+  /* Convert the 5x51-bit representation to sixteen base-2^16 digits. */
+  for (i = 0; i < 16; ++i) {
+    unsigned offset = i * 16U;
+    unsigned limb = offset / 51U;
+    unsigned shift = offset % 51U;
+    uint64_t xv = x->v[limb] >> shift;
+    uint64_t yv = y->v[limb] >> shift;
+    if (shift > 35U && limb < 4U) {
+      xv |= x->v[limb + 1] << (51U - shift);
+      yv |= y->v[limb + 1] << (51U - shift);
     }
-    h[0] += (h[9] >> 25) * 19;
-    h[9] &= (UINT64_C(1) << 25) - 1;
+    a[i] = xv & digit_mask;
+    b[i] = yv & digit_mask;
   }
-  r->v[0] = h[0] | (h[1] << 26);
-  r->v[1] = h[2] | (h[3] << 26);
-  r->v[2] = h[4] | (h[5] << 26);
-  r->v[3] = h[6] | (h[7] << 26);
-  r->v[4] = h[8] | (h[9] << 26);
+
+  _fe25519_mul_coeff(h, a, b);
+  for (i = 0; i < 31; ++i) {
+    h[i + 1] += h[i] >> 16;
+    h[i] &= digit_mask;
+  }
+  h[31] &= digit_mask;
+
+  /* 2^255 = 19 (mod p), so each digit at bit 256 or above folds by 38. */
+  for (i = 31; i >= 16; --i)
+    h[i - 16] += h[i] * 38;
+
+  /* Fold bit 255, then propagate the carries created by the folds. */
+  h[0] += (h[15] >> 15) * 19;
+  h[15] &= UINT64_C(0x7fff);
+  for (i = 0; i < 3; ++i) {
+    for (bit = 0; bit < 15; ++bit) {
+      h[bit + 1] += h[bit] >> 16;
+      h[bit] &= digit_mask;
+    }
+    h[0] += (h[15] >> 15) * 19;
+    h[15] &= UINT64_C(0x7fff);
+  }
+
+  /* Pack the normalized bit string back into five radix-2^51 limbs. */
+  for (i = 0; i < 5; ++i) {
+    unsigned offset = i * 51U;
+    unsigned limb = offset / 16U;
+    unsigned shift = offset % 16U;
+    uint64_t value = h[limb] >> shift;
+    value |= h[limb + 1] << (16U - shift);
+    value |= h[limb + 2] << (32U - shift);
+    value |= h[limb + 3] << (48U - shift);
+    r->v[i] = value & FE_MASK;
+  }
 }
 void fe25519_square(fe25519 *r, const fe25519 *x)
 {
